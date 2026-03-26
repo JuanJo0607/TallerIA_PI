@@ -8,16 +8,47 @@ import matplotlib
 import io
 import urllib, base64
 
+import os
+import numpy as np
+from openai import OpenAI
+from dotenv import load_dotenv
+
 def home(request):
-    #return HttpResponse('<h1>Welcome to Home Page</h1>')
-    #return render(request, 'home.html')
-    #return render(request, 'home.html', {'name':'Paola Vallejo'})
-    searchTerm = request.GET.get('searchMovie') # GET se usa para solicitar recursos de un servidor
+    import os, numpy as np
+    from openai import OpenAI
+    from dotenv import load_dotenv
+
+    searchTerm = request.GET.get('searchMovie')
+    movies = Movie.objects.all()
+    recommendation = None
+
     if searchTerm:
+        # Búsqueda tradicional por título
         movies = Movie.objects.filter(title__icontains=searchTerm)
-    else:
-        movies = Movie.objects.all()
-    return render(request, 'home.html', {'searchTerm':searchTerm, 'movies':movies})
+
+        # Recomendación semántica con embeddings
+        load_dotenv('../openAI.env')
+        client = OpenAI(api_key=os.environ.get('openai_apikey'))
+
+        def cosine_similarity(a, b):
+            return np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b))
+
+        response = client.embeddings.create(input=[searchTerm], model="text-embedding-3-small")
+        prompt_emb = np.array(response.data[0].embedding, dtype=np.float32)
+
+        best_movie, max_sim = None, -1
+        for movie in Movie.objects.exclude(emb=None):
+            sim = cosine_similarity(prompt_emb, np.frombuffer(movie.emb, dtype=np.float32))
+            if sim > max_sim:
+                max_sim, best_movie = sim, movie
+
+        recommendation = {'movie': best_movie, 'similarity': round(float(max_sim), 4)}
+
+    return render(request, 'home.html', {
+        'searchTerm': searchTerm,
+        'movies': movies,
+        'recommendation': recommendation,
+    })
 
 
 def about(request):
@@ -123,3 +154,35 @@ def generate_bar_chart(data, xlabel, ylabel):
     buffer.close()
     graphic = base64.b64encode(image_png).decode('utf-8')
     return graphic
+
+
+
+def recommend(request):
+    result = None
+    prompt = ""
+
+    if request.method == 'POST':
+        prompt = request.POST.get('prompt', '')
+
+        load_dotenv('../openAI.env')
+        client = OpenAI(api_key=os.environ.get('openai_apikey'))
+
+        def cosine_similarity(a, b):
+            return np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b))
+
+        response = client.embeddings.create(input=[prompt], model="text-embedding-3-small")
+        prompt_emb = np.array(response.data[0].embedding, dtype=np.float32)
+
+        best_movie = None
+        max_similarity = -1
+
+        for movie in Movie.objects.exclude(emb=None):
+            movie_emb = np.frombuffer(movie.emb, dtype=np.float32)
+            similarity = cosine_similarity(prompt_emb, movie_emb)
+            if similarity > max_similarity:
+                max_similarity = similarity
+                best_movie = movie
+
+        result = {'movie': best_movie, 'similarity': round(float(max_similarity), 4)}
+
+    return render(request, 'recommend.html', {'result': result, 'prompt': prompt})
