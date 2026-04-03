@@ -1,0 +1,38 @@
+{% extends 'base.html' %}
+{% block content %}
+
+<div class="container">
+    <h2>🎬 Movie Recommender</h2>
+    <form method="POST">
+        {% csrf_token %}
+        <div class="mb-3">
+            <label class="form-label">Describe a movie you want to watch:</label>
+            <input type="text" class="form-control" name="prompt" value="{{ prompt }}"
+                   placeholder="Ej: película de la segunda guerra mundial"/>
+        </div>
+        <button type="submit" class="btn btn-primary">Search</button>
+    </form>
+
+    <p>Searching for: {{ prompt }}</p>
+
+    {% if result %}
+    <div class="row row-cols-1 row-cols-md-3 g-4 mt-2">
+        <div class="col">
+            <div class="card">
+                <img src="{{ result.movie.image.url }}" class="card-img-top" alt="...">
+                <div class="card-body">
+                    <h5 class="card-title fw-bold">{{ result.movie.title }}</h5>
+                    <p class="card-text">{{ result.movie.description }}</p>
+                    <p class="card-text">{{ result.movie.genre }}</p>
+                    <p class="card-text">{{ result.movie.year }}</p>
+                    {% if result.movie.url %}
+                        <a href="{{ result.movie.url }}" class="btn btn-primary">Movie Link</a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+{% endblock content %}
